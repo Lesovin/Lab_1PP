@@ -12,6 +12,12 @@
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
+Lab_1PP.sln
+Lab_1PP.vcxproj
+Lab_1PP.vcxproj.filters
+Lab_1PP.vcxproj.user
+.gitignore
+.gitattributes
 
 # Mono auto generated files
 mono_crash.*
