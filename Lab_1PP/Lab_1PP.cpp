@@ -77,7 +77,7 @@ std::vector<std::vector<int>> MatrixMul(const std::vector<std::vector<int>>& M1,
 
 int main()
 {
-    int m_size = 400;
+    int m_size = 1000;
     std::vector<std::vector<int>> M1(m_size, std::vector<int>(m_size));
     std::vector<std::vector<int>> M2(m_size, std::vector<int>(m_size));
     std::vector<std::vector<int>> Res(m_size, std::vector<int>(m_size));
