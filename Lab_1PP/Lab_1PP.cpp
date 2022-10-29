@@ -1,4 +1,5 @@
 ﻿
+#include <omp.h>
 #include <vector>
 #include <iostream>
 #include <fstream>
@@ -52,21 +53,24 @@ void ReadFile(std::vector<std::vector<int>>& M, const char* str, int size)
 
 std::vector<std::vector<int>> MatrixMul(const std::vector<std::vector<int>>& M1, const std::vector<std::vector<int>>& M2, int size)
 {
+    int number_of_threads = 16;
     std::vector<std::vector<int>> Res(size, std::vector<int>(size));
     std::ofstream Results("Result.txt", std::ios::app);
     auto start = std::chrono::steady_clock::now();
-    for (size_t i = 0; i < size; i++)
-    {
-        for (size_t j = 0; j < size; j++)
+# pragma omp parallel for num_threads(number_of_threads)
+        for (int i = 0; i < size; i++)
         {
-            for (size_t k = 0; k < size; k++)
-                Res[i][j] += M1[i][k] * M2[k][j];
+            for (int j = 0; j < size; j++)
+            {
+                for (int k = 0; k < size; k++)
+                    Res[i][j] += M1[i][k] * M2[k][j];
+            }
         }
-    }
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double, std::milli> elapsed = end - start;
     Results << "Размер матрицы: " << size << "x" << size << std::endl;
     Results << "Время выполнения: " << elapsed.count() << std::endl;
+    Results << "Количество потоков:" << number_of_threads << std::endl;
     Results << "**********************"<<"\n";
     return Res;
 }
