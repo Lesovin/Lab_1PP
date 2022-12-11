@@ -1,22 +1,22 @@
 ﻿
-#include <omp.h>
 #include <vector>
 #include <iostream>
 #include <fstream>
 #include <chrono>
-/*
-void PrintMatrix(const std::vector<std::vector<int>>& M)
+#include "mpi.h"
+
+void Print_Matrix(int* Mat, int size)
 {
-    for (size_t i = 0; i < 400; i++)
+    std::cout << "Multiplication: " << std::endl;
+    for (int i = 0; i < size; i++)
     {
-        for (size_t j = 0; j < 400; j++)
+        for (int j = 0; j < size; j++)
         {
-            std::cout << M[i][j] << "\t";
+            std::cout << Mat[i * size + j] << " ";
         }
-        std::cout << "\n";
+        std::cout << std::endl;
     }
 }
-*/
 
 void FillFiles(int size)
 {
@@ -29,7 +29,7 @@ void FillFiles(int size)
     Data2.close();
 }
 
-void ReadFile(std::vector<std::vector<int>>& M, const char* str, int size)
+void ReadFile(int* M, const char* str, int size)
 {
     int temp;
     size_t i = 0;
@@ -39,7 +39,7 @@ void ReadFile(std::vector<std::vector<int>>& M, const char* str, int size)
     {
         if (i < size)
         {
-            M[i][j] = temp;
+            M[i * size + j] = temp;
             j++;
             if (j == size)
             {
@@ -51,47 +51,96 @@ void ReadFile(std::vector<std::vector<int>>& M, const char* str, int size)
     Data.close();
 }
 
-std::vector<std::vector<int>> MatrixMul(const std::vector<std::vector<int>>& M1, const std::vector<std::vector<int>>& M2, int size)
+int main(int argc, char * argv[])
 {
-    int number_of_threads = 16;
-    std::vector<std::vector<int>> Res(size, std::vector<int>(size));
-    std::ofstream Results("Result.txt", std::ios::app);
-    auto start = std::chrono::steady_clock::now();
-# pragma omp parallel for num_threads(number_of_threads)
-        for (int i = 0; i < size; i++)
-        {
-            for (int j = 0; j < size; j++)
-            {
-                for (int k = 0; k < size; k++)
-                    Res[i][j] += M1[i][k] * M2[k][j];
+    double start, stop;
+    int i, j, k, l;
+    int* A, * B, * C, * buffer, * ans;
+    int size = 1000;
+    int rank, numprocs, line;
+
+    MPI_Init(&argc, &argv); 
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank); 
+    MPI_Comm_size(MPI_COMM_WORLD, &numprocs); 
+
+    line = size / numprocs;
+    A = new int[size * size];
+    B = new int[size * size];
+    C = new int[size * size];
+    buffer = new int[size * line]; 
+    ans = new int[size * line]; 
+
+    if (rank == 0)
+    {
+        
+        for (i = 0; i < size; i++) 
+            for (j = 0; j < size; j++)
+                A[i * size + j] = 1;
+
+        for (i = 0; i < size; i++)
+            for (j = 0; j < size; j++)
+                B[i * size + j] = 2;
+      
+        start = MPI_Wtime();
+        
+        for (i = 1; i < numprocs; i++) {
+            MPI_Send(B, size * size, MPI_INT, i, 0, MPI_COMM_WORLD);
+        }
+        
+        for (l = 1; l < numprocs; l++) {
+            MPI_Send(A + (l - 1) * line * size, size * line, MPI_INT, l, 1, MPI_COMM_WORLD);
+        }
+        
+        for (k = 1; k < numprocs; k++) {
+            MPI_Recv(ans, line * size, MPI_INT, k, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  
+            for (i = 0; i < line; i++) {
+                for (j = 0; j < size; j++) {
+                    C[((k - 1) * line + i) * size + j] = ans[i * size + j];
+                }
             }
         }
-    auto end = std::chrono::steady_clock::now();
-    std::chrono::duration<double, std::milli> elapsed = end - start;
-    Results << "Размер матрицы: " << size << "x" << size << std::endl;
-    Results << "Время выполнения: " << elapsed.count() << std::endl;
-    Results << "Количество потоков:" << number_of_threads << std::endl;
-    Results << "**********************"<<"\n";
-    return Res;
-}
-
-int main()
-{
-    int m_size = 1000;
-    std::vector<std::vector<int>> M1(m_size, std::vector<int>(m_size));
-    std::vector<std::vector<int>> M2(m_size, std::vector<int>(m_size));
-    std::vector<std::vector<int>> Res(m_size, std::vector<int>(m_size));
-    FillFiles(m_size);
-    ReadFile(M1, "Data1.txt", m_size);
-    ReadFile(M2, "Data2.txt", m_size);
-    Res=MatrixMul(M1, M2, m_size);
-    std::ofstream MulRes("Res_Matrix.txt");
-    for (size_t i = 0; i < m_size; i++)
-    {
-        for (size_t j = 0; j < m_size; j++)
-        {
-            MulRes << Res[i][j]<<"\t";
+       
+        for (i = (numprocs - 1) * line; i < size; i++) {
+            for (j = 0; j < size; j++) {
+                int temp = 0;
+                for (k = 0; k < size; k++)
+                    temp += A[i * size + k] * B[k * size + j];
+                C[i * size + j] = temp;
+            }
         }
+
+ 
+        stop = MPI_Wtime();
+
+        std::cout << "Rank: " << rank << "\nTime: " << stop - start << " s" << std::endl;
+
+        //Print_Matrix(C, size);
+
+        delete[] A;
+        delete[] B;
+        delete[] C;
+        delete[] buffer;
+        delete[] ans;
     }
+
+    
+    else {
+        MPI_Recv(B, size * size, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        MPI_Recv(buffer, size * line, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        for (i = 0; i < line; i++) {
+            for (j = 0; j < size; j++) {
+                int temp = 0;
+                for (k = 0; k < size; k++)
+                    temp += buffer[i * size + k] * B[k * size + j];
+                ans[i * size + j] = temp;
+            }
+        }
+        MPI_Send(ans, line * size, MPI_INT, 0, 3, MPI_COMM_WORLD);
+    }
+
+    MPI_Finalize();
+
     return 0;
 }
